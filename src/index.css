@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-cyan: #22d3ee;
+  --color-brand-indigo: #4338ca;
+  --animate-scan: scan 2.5s ease-in-out infinite;
+
+  @keyframes scan {
+    0%, 100% { top: 10%; opacity: 0.2; }
+    50% { top: 90%; opacity: 0.8; }
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-[#020617] text-slate-300 antialiased selection:bg-cyan-500/30 font-sans;
+    background-image: 
+      radial-gradient(circle at 10% 10%, rgba(8, 145, 178, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 90% 90%, rgba(49, 46, 129, 0.1) 0%, transparent 50%);
+  }
+}
+
+@layer components {
+  .glass {
+    @apply backdrop-blur-[16px] bg-slate-900/60 border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)];
+  }
+  
+  .neon-cyan {
+    @apply text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)];
+  }
+
+  .neon-border {
+    @apply border-cyan-400/40 shadow-[0_0_15px_rgba(34,211,238,0.2)];
+  }
+
+  .scanner-line {
+    @apply absolute w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#22d3ee];
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(34, 211, 238, 0.2);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(34, 211, 238, 0.4);
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .glow-button {
+    @apply bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-6 py-3 rounded-2xl 
+           transition-all duration-300 active:scale-95 shadow-[0_0_20px_rgba(34,211,238,0.3)]
+           hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] uppercase tracking-widest text-xs;
+  }
+}

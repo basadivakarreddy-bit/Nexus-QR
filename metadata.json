@@ -1,0 +1,10 @@
+{
+  "name": "Nexus QR",
+  "description": "A high-fidelity QR code companion with real-time generation and live camera scanning.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
