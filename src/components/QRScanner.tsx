@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import jsQR from 'jsqr';
 import { BrowserMultiFormatReader } from '@zxing/library';
-import { Camera, RefreshCw, Copy, ExternalLink, AlertCircle, Maximize2, Clock, Trash2, History, Zap, ZapOff, Image as ImageIcon } from 'lucide-react';
+import { Camera, RefreshCw, Copy, ExternalLink, AlertCircle, Maximize2, Clock, Trash2, History, Zap, ZapOff, Image as ImageIcon, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import confetti from 'canvas-confetti';
@@ -377,6 +377,16 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
     }
   }
 
+  const isImagePayload = (str: string) => {
+    if (!str) return false;
+    if (str.startsWith('data:image/')) return true;
+    // Check if it starts with standard http/https and ends with standard image extensions
+    if (/^https?:\/\/.*\.(png|jpg|jpeg|gif|webp|svg|bmp)(?:\?.*)?$/i.test(str)) {
+      return true;
+    }
+    return false;
+  };
+
   const formatTime = (ts: number) => {
     return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
@@ -507,11 +517,33 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
                 {detectedFormat ? `${detectedFormat} Extracted` : "Payload Extracted"}
               </h3>
               
-              <div className="w-full bg-slate-950/80 p-6 rounded-2xl border border-white/5 mb-8 font-mono text-sm break-all text-slate-300 text-center max-h-48 overflow-y-auto leading-relaxed">
-                {result}
-              </div>
+              {isImagePayload(result) ? (
+                <div className="w-full flex flex-col items-center gap-4 mb-8">
+                  <div className="relative group overflow-hidden rounded-2xl border border-white/15 bg-slate-950 p-2.5 max-w-[260px] shadow-[0_8px_32px_rgba(34,211,238,0.15)] flex items-center justify-center">
+                    <img
+                      src={result}
+                      alt="Scanned media payload"
+                      className="max-h-44 max-w-full object-contain rounded-xl h-auto"
+                      referrerPolicy="no-referrer"
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                    <div className="absolute top-4 right-4 bg-emerald-500 text-slate-950 text-[8px] font-black tracking-widest uppercase px-2.5 py-1 rounded-md shadow-lg border border-emerald-400/30">
+                      Decoded Image
+                    </div>
+                  </div>
+                  <div className="w-full text-center">
+                    <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider bg-slate-950/40 px-3 py-1.5 rounded-lg border border-white/5 inline-block">
+                      Media Payload • {result.length} Chars
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full bg-slate-950/80 p-6 rounded-2xl border border-white/5 mb-8 font-mono text-sm break-all text-slate-300 text-center max-h-48 overflow-y-auto leading-relaxed">
+                  {result}
+                </div>
+              )}
               
-              <div className="flex flex-col sm:flex-row gap-4 w-full">
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
                 <button
                   onClick={() => handleCopy(result)}
                   className="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all font-bold text-[10px] uppercase tracking-widest text-slate-300 border border-white/10"
@@ -519,6 +551,26 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
                   <Copy className="w-4 h-4" />
                   Copy Data
                 </button>
+                
+                {isImagePayload(result) && (
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = result;
+                      const mimeMatch = result.match(/^data:(image\/[a-zA-Z+-]+);base64,/);
+                      const ext = mimeMatch ? mimeMatch[1].split('/')[1] : 'png';
+                      link.download = `scanned_image_${Date.now()}.${ext}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-4 bg-emerald-400/10 hover:bg-emerald-400/20 text-emerald-400 hover:text-emerald-300 rounded-2xl transition-all font-bold text-[10px] uppercase tracking-widest border border-emerald-400/20 shadow-[0_4px_16px_rgba(16,185,129,0.1)] active:scale-95"
+                  >
+                    <Download className="w-4 h-4" />
+                    Save Image
+                  </button>
+                )}
+
                 {isUrl(result) && (
                   <a
                     href={result}
@@ -627,9 +679,32 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <p className="text-xs font-mono text-slate-300 break-all line-clamp-2 min-h-[2rem]">
-                    {item.data}
-                  </p>
+                  {isImagePayload(item.data) ? (
+                    <div className="flex items-center gap-3 bg-slate-950/40 p-2.5 rounded-xl border border-white/5">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 bg-slate-950 flex-shrink-0 flex items-center justify-center">
+                        <img
+                          src={item.data}
+                          alt="Payload thumbnail"
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                          style={{ imageRendering: 'pixelated' }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-emerald-400 tracking-wider uppercase flex items-center gap-1">
+                          <ImageIcon className="w-3 h-3" /> Decoded Image
+                        </p>
+                        <p className="text-[9px] font-mono text-slate-500 truncate mt-0.5">
+                          Size • {item.data.length} characters
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs font-mono text-slate-300 break-all line-clamp-2 min-h-[2rem]">
+                      {item.data}
+                    </p>
+                  )}
+                  
                   <div className="flex gap-2 mt-1">
                     <button
                       onClick={() => handleCopy(item.data)}
@@ -638,6 +713,26 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
                       <Copy className="w-3 h-3" />
                       Copy
                     </button>
+                    
+                    {isImagePayload(item.data) && (
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = item.data;
+                          const mimeMatch = item.data.match(/^data:(image\/[a-zA-Z+-]+);base64,/);
+                          const ext = mimeMatch ? mimeMatch[1].split('/')[1] : 'png';
+                          link.download = `scanned_image_${item.timestamp}.${ext}`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        className="flex-1 py-2 bg-emerald-400/10 hover:bg-emerald-400/20 text-emerald-400 text-[9px] font-bold uppercase tracking-widest rounded-lg border border-emerald-400/10 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Download className="w-3 h-3" />
+                        Save
+                      </button>
+                    )}
+
                     {isUrl(item.data) && (
                       <a
                         href={item.data}
