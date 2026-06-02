@@ -69,12 +69,15 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
             setError('Could not process the uploaded image.');
             return;
           }
+          // Set solid white background to support transparent PNG formats gracefully
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
           ctx.drawImage(img, 0, 0);
           const imgData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
           
-          // Try jsQR first for high performance
+          // Try jsQR first for high performance, allowing both inverted and standard scans
           const code = jsQR(imgData.data, imgData.width, imgData.height, {
-            inversionAttempts: "dontInvert"
+            inversionAttempts: "attemptBoth"
           });
           if (code) {
             onSuccess(code.data, 'QR_CODE');
@@ -270,9 +273,9 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
         
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         
-        // 1. Check for QR Code first via fast jsQR
+        // 1. Check for QR Code first via fast jsQR, optimizing for colored and inverted codes
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "dontInvert",
+          inversionAttempts: "attemptBoth",
         });
 
         if (code) {
