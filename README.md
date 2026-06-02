@@ -4,7 +4,7 @@ A high-fidelity, real-time QR code companion with responsive, real-time generati
 
 ---
 
-## 🚀 Key Feature
+## 🚀 Key Features
 
 ### 🎨 1. Multi-Format QR Generator
 - **Supported Payload Specifications**:
