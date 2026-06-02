@@ -24,6 +24,7 @@ export default function QRGenerator() {
   const [bgColor, setBgColor] = useState('#ffffff');
   const [size, setSize] = useState(300);
   const [copied, setCopied] = useState(false);
+  const [qrStyle, setQrStyle] = useState<'CLASSIC' | 'LOGO'>('CLASSIC');
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleMediaUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,16 +127,70 @@ export default function QRGenerator() {
       return;
     }
     try {
-      const url = await QRCode.toDataURL(finalPayload, {
-        width: size,
-        margin: 2,
-        color: {
-          dark: fgColor,
-          light: bgColor,
-        },
-        errorCorrectionLevel: contentType === 'MEDIA' ? 'L' : 'H',
-      });
-      setQrDataUrl(url);
+      if (qrStyle === 'LOGO') {
+        const qr = QRCode.create(finalPayload, {
+          errorCorrectionLevel: contentType === 'MEDIA' ? 'L' : 'H',
+        });
+        const N = qr.modules.size;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Clear background with designated background color
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(0, 0, size, size);
+
+          // Prepare foreground color
+          ctx.fillStyle = fgColor;
+
+          const margin = 2;
+          const totalCells = N + (2 * margin);
+          const cellSize = size / totalCells;
+
+          const isFinderPattern = (r: number, c: number, size: number) => {
+            if (r < 7 && c < 7) return true;
+            if (r < 7 && c >= size - 7) return true;
+            if (r >= size - 7 && c < 7) return true;
+            return false;
+          };
+
+          for (let r = 0; r < N; r++) {
+            for (let c = 0; c < N; c++) {
+              if (qr.modules.get(r, c)) {
+                const x = (c + margin) * cellSize;
+                const y = (r + margin) * cellSize;
+
+                if (isFinderPattern(r, c, N)) {
+                  // Standard crisp square grids for corner patterns
+                  ctx.fillRect(x, y, cellSize, cellSize);
+                } else {
+                  // Stylized rounded dots with premium 0.82 spacing ratio
+                  const cx = x + (cellSize / 2);
+                  const cy = y + (cellSize / 2);
+                  const radius = (cellSize / 2) * 0.82;
+                  ctx.beginPath();
+                  ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+                  ctx.fill();
+                }
+              }
+            }
+          }
+          setQrDataUrl(canvas.toDataURL());
+        }
+      } else {
+        const url = await QRCode.toDataURL(finalPayload, {
+          width: size,
+          margin: 2,
+          color: {
+            dark: fgColor,
+            light: bgColor,
+          },
+          errorCorrectionLevel: contentType === 'MEDIA' ? 'L' : 'H',
+        });
+        setQrDataUrl(url);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -143,7 +198,7 @@ export default function QRGenerator() {
 
   useEffect(() => {
     generateQR();
-  }, [text, wifi, vcard, contentType, fgColor, bgColor, size, media]);
+  }, [text, wifi, vcard, contentType, fgColor, bgColor, size, media, qrStyle]);
 
   const handleDownload = () => {
     const link = document.createElement('a');
@@ -466,6 +521,34 @@ export default function QRGenerator() {
               )}
             </AnimatePresence>
             <div className="absolute inset-0 border-[16px] border-white rounded-3xl pointer-events-none" />
+          </div>
+
+          {/* QR Style Selectors: Classic vs Logo */}
+          <div className="flex bg-slate-950/60 border border-white/10 p-1 rounded-xl gap-1 w-full max-w-[260px] relative z-20">
+            <button
+              type="button"
+              onClick={() => setQrStyle('CLASSIC')}
+              className={cn(
+                "flex-1 py-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer",
+                qrStyle === 'CLASSIC'
+                  ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20 shadow-[0_0_10px_rgba(34,211,238,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 border border-transparent opacity-60 hover:opacity-100"
+              )}
+            >
+              Classic QR
+            </button>
+            <button
+              type="button"
+              onClick={() => setQrStyle('LOGO')}
+              className={cn(
+                "flex-1 py-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer",
+                qrStyle === 'LOGO'
+                  ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20 shadow-[0_0_10px_rgba(34,211,238,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 border border-transparent opacity-60 hover:opacity-100"
+              )}
+            >
+              Logo QR
+            </button>
           </div>
 
           <div className="w-full space-y-3">
