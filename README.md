@@ -17,13 +17,15 @@ A high-fidelity, real-time QR code companion with responsive, real-time generati
   - Dedicated real-time Foreground and Background Hex contrast color selectors.
   - Quick-download link exporter to save raw high-quality PNGs directly onto local filesystems.
 
-### 📷 2. Real-Time Camera Scanner ("Optical Ingestion")
-- **Fluid Ingestion Viewfinder**: Uses web-stream configurations via `navigator.mediaDevices` bound cleanly to `jsQR` loops.
-- **Accurate Display Realism**: Utilizes a fully colored camera feed (no artificial grayscale filter) with proper, natural-facing aspect ratios.
-- **Aspect-Square Formatting**: viewports are formatted as a perfectly responsive square layout (standardized up to `600px` size limits) explicitly designed to scan flawlessly on small mobile viewports.
+### 📷 2. Real-Time Camera & Barcode Scanner ("Optical Ingestion")
+- **Dual-Engine Hybrid Decoder**: Uses high-speed web-stream configurations via `navigator.mediaDevices` bound to `jsQR` for ultra-fast QR recognition, smoothly falling back to a throttled `@zxing/library` loop to decode 1D/2D standard barcodes (such as Code 128, Code 39, EAN 13, UPC-A, etc.).
+- **Live Device Flashlight/Torch Control**: Activates on-device torch controls directly within the browser viewframe (for compatible devices) via track constraints.
+- **Unified Control Toolbar**: Floating bottom overlay houses instant Flash toggle indicators and Image Scan imports.
+- **Direct File Scan Ingestion**: Fully integrated image uploader lets users select or drag-and-drop saved QR code and barcode images directly from local filesystems to be processed by both decoding engines.
+- **Fluid Ingestion Viewfinder**: Dynamic, auto-adjusting aspect video feed representation showcasing absolute resolution precision without grey-tinted overlay distorting color balances.
 - **Interactive Restart Logic**: Integrates an innovative, high-fidelity **Initialize Next Cycle** HUD button immediately inside or above the camera, showing up dynamically right after scan payloads are decoded.
 - **Sensory Confetti Emission**: Celebrates every valid visual recognition with lightweight canvas confetti splashes.
-- **Safeguarded Callbacks**: Bulletproof error-handling intercepts permission blocks, busy devices, or aborted video loops.
+- **Safeguarded Callbacks**: Bulletproof error-handling intercepts permission blocks, busy devices, or aborted video loops with graceful fallback guidance triggering image upload scan alternates.
 
 ### 🕒 3. Ingested Session History Registry
 - **Local Persistence Integration**: Preserves scanned lists safely in offline storage (`localStorage`) so past metadata is kept across page reloads.
@@ -38,7 +40,7 @@ A high-fidelity, real-time QR code companion with responsive, real-time generati
 - **Build Engine & Compilation Server**: [Vite 6](https://vite.dev/) powered with [TSX](https://github.com/privatenumber/tsx) and [esbuild](https://esbuild.github.io/)
 - **Layout Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with adaptive glass effect styles
 - **Orchestrated Animations**: [Motion (React/Framer-Motion)](https://motion.dev/) for tap states, exit transitions, and tab movements.
-- **QR Operations Engine**: `qrcode` (Generation matrix) & `jsQR` (Visual ingestion decoder)
+- **QR & Barcode Operations Engine**: `qrcode` (Generation matrix), `jsQR` (Fast QR decoder), & `@zxing/library` (Multi-format 1D/2D Barcode decoder)
 - **Haptic Animations & Icons**: `canvas-confetti` and `lucide-react`
 
 ---
@@ -58,7 +60,7 @@ A high-fidelity, real-time QR code companion with responsive, real-time generati
 │   │   └── utils.ts       # Utility modules for dynamic styling maps (clsx, tailwind-merge)
 │   └── components/
 │       ├── QRGenerator.tsx # Configurable multi-type payload generator UI
-│       └── QRScanner.tsx   # Live camera video canvas and logged history list
+│       └── QRScanner.tsx   # Live camera video canvas, multi-format file/live reader and logged history
 ```
 
 ---
@@ -93,10 +95,11 @@ npm run start
 4. Modify the background or foreground matrix colors using the custom pickers.
 5. Tap the custom-glowing **Download QR** action button.
 
-### B. Ingesting & Managing QR Scans
+### B. Ingesting & Managing QR/Barcode Scans
 1. Select the **Scan QR** controller tab.
-2. Authorize web-camera requests inside the web popup.
-3. Bring any QR code inside the central optical viewport.
-4. Once scanned, copy the text to your clipboard or open it immediately in a new security tab if the payload is a URL.
-5. Tap **Initialize Next Cycle** inside the camera viewer HUD to resume scanning additional codes.
-6. Browse, copy, or purge logs using the **Ingestion History** controls located beneath the viewer.
+2. **Scan via Video Feed**: Authorize web-camera requests inside the web popup and align any QR code or standard barcode in the central viewfinder area.
+3. **Flash Toggle**: Tap the integrated floating indicator labeled **Flash ON/OFF** to illuminate low-light physical spaces (supported on back-facing camera mobile engines).
+4. **Scan from Image File**: Tap **Scan Image** or upload a file via the central upload prompt inside permission state dialogs to read codes directly from local pictures or screenshot snippets.
+5. Once scanned, copy the text to your clipboard, read the detected format (e.g. *Code 128*, *EAN 13*, *QR Code*), or open it immediately in a new secure browser tab if it contains a URL.
+6. Tap **Initialize Next Cycle** inside the camera viewer HUD to resume scanning additional codes.
+7. Browse, inspect detected format classifications, or prune logs using the **Ingestion History** registry underneath.
