@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import jsQR from 'jsqr';
-import { Camera, RefreshCw, Copy, ExternalLink, AlertCircle, Maximize2, Clock, Trash2, History, Zap, ZapOff } from 'lucide-react';
+import { BrowserMultiFormatReader } from '@zxing/library';
+import { Camera, RefreshCw, Copy, ExternalLink, AlertCircle, Maximize2, Clock, Trash2, History, Zap, ZapOff, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import confetti from 'canvas-confetti';
@@ -9,6 +10,7 @@ interface HistoryItem {
   id: string;
   data: string;
   timestamp: number;
+  format?: string;
 }
 
 interface QRScannerProps {
@@ -18,6 +20,7 @@ interface QRScannerProps {
 export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
   const [scanning, setScanning] = useState(true);
   const [result, setResult] = useState<string | null>(null);
+  const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   
@@ -39,6 +42,127 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef<number>();
   const activeStreamRef = useRef<MediaStream | null>(null);
+
+  const frameCountRef = useRef(0);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const isDecodingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new window.Image();
+      img.onload = () => {
+        try {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const ctx = tempCanvas.getContext('2d');
+          if (!ctx) {
+            setError('Could not process the uploaded image.');
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          const imgData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+          
+          // Try jsQR first for high performance
+          const code = jsQR(imgData.data, imgData.width, imgData.height, {
+            inversionAttempts: "dontInvert"
+          });
+          if (code) {
+            onSuccess(code.data, 'QR_CODE');
+            return;
+          }
+
+          // Fallback to ZXing MultiFormat reader for Barcodes
+          const zxingReader = getCodeReader();
+          zxingReader.decodeFromImage(undefined, dataUrl)
+            .then((res) => {
+              if (res) {
+                const text = res.getText();
+                let formatName = 'BARCODE';
+                try {
+                  const format = res.getBarcodeFormat();
+                  formatName = format !== undefined && format !== null ? String(format) : 'BARCODE';
+                } catch (err) {}
+                onSuccess(text, formatName);
+              } else {
+                setError('No QR code or barcode found in the image. Please try a cleaner or higher resolution image.');
+              }
+            })
+            .catch((err) => {
+              console.warn('ZXing image decoding failed:', err);
+              setError('Could not decode any QR code or barcode from the uploaded image. Please ensure it is clearly visible.');
+            });
+        } catch (err) {
+          console.error(err);
+          setError('An error occurred while processing the uploaded image file.');
+        }
+      };
+      img.onerror = () => {
+        setError('Failed to load image file.');
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+    // Reset file input so same file can be uploaded again
+    event.target.value = '';
+  };
+
+  const getCodeReader = () => {
+    if (!codeReaderRef.current) {
+      codeReaderRef.current = new BrowserMultiFormatReader();
+    }
+    return codeReaderRef.current;
+  };
+
+  const translateFormatName = (format: string | number) => {
+    const formatStr = String(format);
+    const formatMap: Record<string, string> = {
+      '0': 'Aztec',
+      '1': 'Codabar',
+      '2': 'Code 39',
+      '3': 'Code 93',
+      '4': 'Code 128',
+      '5': 'Data Matrix',
+      '6': 'EAN 8',
+      '7': 'EAN 13',
+      '8': 'ITF',
+      '9': 'MaxiCode',
+      '10': 'PDF 417',
+      '11': 'QR Code',
+      '12': 'RSS 14',
+      '13': 'RSS Expanded',
+      '14': 'UPC-A',
+      '15': 'UPC-E',
+      '16': 'UPC/EAN Extension',
+      'AZTEC': 'Aztec',
+      'CODABAR': 'Codabar',
+      'CODE_39': 'Code 39',
+      'CODE_93': 'Code 93',
+      'CODE_128': 'Code 128',
+      'DATA_MATRIX': 'Data Matrix',
+      'EAN_8': 'EAN 8',
+      'EAN_13': 'EAN 13',
+      'ITF': 'ITF',
+      'MAXICODE': 'MaxiCode',
+      'PDF_417': 'PDF 417',
+      'QR_CODE': 'QR Code',
+      'RSS_14': 'RSS 14',
+      'RSS_EXPANDED': 'RSS Expanded',
+      'UPC_A': 'UPC-A',
+      'UPC_E': 'UPC-E',
+      'UPC_EAN_EXTENSION': 'UPC/EAN Extension'
+    };
+    return formatMap[formatStr.toUpperCase()] || formatStr;
+  };
 
   // Synchronize history with localStorage whenever state changes
   useEffect(() => {
@@ -145,22 +269,49 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // 1. Check for QR Code first via fast jsQR
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: "dontInvert",
         });
 
         if (code) {
-          onSuccess(code.data);
+          onSuccess(code.data, 'QR_CODE');
           return;
+        }
+
+        // 2. Fall back to Barcodes through ZXing MultiFormat reader on a throttled loop to keep CPU low
+        frameCountRef.current++;
+        if (frameCountRef.current % 6 === 0 && !isDecodingRef.current) {
+          isDecodingRef.current = true;
+          try {
+            const reader = getCodeReader();
+            const res = reader.decode(video);
+            if (res && scanning) {
+              const text = res.getText();
+              let formatName = 'BARCODE';
+              try {
+                const format = res.getBarcodeFormat();
+                formatName = format !== undefined && format !== null ? String(format) : 'BARCODE';
+              } catch (err) {}
+              onSuccess(text, formatName);
+            }
+          } catch (err) {
+            // No barcode found on this frame is normal during constant scan loops
+          } finally {
+            isDecodingRef.current = false;
+          }
         }
       }
       requestRef.current = requestAnimationFrame(scan);
     }
   };
 
-  const onSuccess = (data: string) => {
+  const onSuccess = (data: string, format: string = 'QR_CODE') => {
     setScanning(false);
     setResult(data);
+    const resolvedFormat = translateFormatName(format);
+    setDetectedFormat(resolvedFormat);
     setFlash(true);
 
     const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -170,7 +321,8 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
     const newItem: HistoryItem = {
       id: id,
       data: data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      format: resolvedFormat
     };
     setHistory(prev => [newItem, ...prev].slice(0, maxHistory)); // Keep history within limit
 
@@ -186,6 +338,7 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
 
   const reset = () => {
     setResult(null);
+    setDetectedFormat(null);
     setError(null);
     startCamera();
   };
@@ -267,22 +420,44 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
               <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-cyan-400">Scanner Live</span>
             </div>
 
-            {/* Flashlight/Torch Toggle Button */}
-            {hasTorch && (
+            {/* Control Toolbar */}
+            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex items-center gap-3 pointer-events-auto z-35 bg-slate-900/80 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+              {hasTorch && (
+                <button
+                  onClick={toggleTorch}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 hover:bg-white/10 text-white rounded-full border transition-all active:scale-95",
+                    torchOn ? "border-amber-400/30 text-amber-400 bg-amber-400/10 shadow-[0_0_12px_rgba(251,191,36,0.15)]" : "border-transparent text-slate-300"
+                  )}
+                  title="Toggle Flashlight"
+                >
+                  {torchOn ? <Zap className="w-3.5 h-3.5 fill-amber-400" /> : <ZapOff className="w-3.5 h-3.5" />}
+                  <span className="text-[9px] uppercase font-bold tracking-widest">
+                    {torchOn ? "Flash ON" : "Flash OFF"}
+                  </span>
+                </button>
+              )}
+
+              {/* Image Scanner Trigger */}
               <button
-                onClick={toggleTorch}
-                className={cn(
-                  "absolute bottom-24 left-1/2 -translate-x-1/2 flex items-center gap-2 px-5 py-2.5 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full border transition-all active:scale-95 pointer-events-auto z-35 shadow-[0_4px_20px_rgba(0,0,0,0.4)]",
-                  torchOn ? "border-amber-400 text-amber-400 bg-amber-400/5 shadow-[0_0_15px_rgba(251,191,36,0.25)]" : "border-white/10 hover:border-white/30"
-                )}
-                title="Toggle Flashlight"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 text-slate-300 hover:text-cyan-400 rounded-full border border-transparent hover:border-cyan-500/25 transition-all active:scale-95"
+                title="Scan QR/Barcode from file"
               >
-                {torchOn ? <Zap className="w-4 h-4 fill-amber-400" /> : <ZapOff className="w-4 h-4 animate-pulse" />}
+                <ImageIcon className="w-3.5 h-3.5" />
                 <span className="text-[9px] uppercase font-bold tracking-widest">
-                  {torchOn ? "Flash ON" : "Flash OFF"}
+                  Scan Image
                 </span>
               </button>
-            )}
+              
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                accept="image/*"
+                className="hidden"
+              />
+            </div>
 
             <div className="absolute bottom-10 left-1/2 -translate-x-1/2 glass px-6 py-2 rounded-2xl border-white/5">
               <p className="text-[10px] uppercase tracking-[0.3em] font-mono text-slate-500">Aligning Neural Matrix...</p>
@@ -328,7 +503,9 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
                 <Maximize2 className="w-8 h-8 text-emerald-400" />
               </div>
               
-              <h3 className="text-sm font-bold text-cyan-400 mb-6 uppercase tracking-[0.4em]">Payload Extracted</h3>
+              <h3 className="text-sm font-bold text-cyan-400 mb-6 uppercase tracking-[0.4em]">
+                {detectedFormat ? `${detectedFormat} Extracted` : "Payload Extracted"}
+              </h3>
               
               <div className="w-full bg-slate-950/80 p-6 rounded-2xl border border-white/5 mb-8 font-mono text-sm break-all text-slate-300 text-center max-h-48 overflow-y-auto leading-relaxed">
                 {result}
@@ -367,15 +544,24 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
 
         {/* Error State */}
         {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 z-40 bg-slate-950/90 backdrop-blur-3xl">
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 z-40 bg-slate-950/95 backdrop-blur-3xl">
             <AlertCircle className="w-16 h-16 text-red-500 mb-6 drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]" />
-            <p className="text-white text-xl font-bold text-center mb-8 uppercase tracking-widest leading-tight">{error}</p>
-            <button
-              onClick={startCamera}
-              className="glow-button px-12"
-            >
-              Force Re-Authorization
-            </button>
+            <p className="text-white text-base md:text-lg font-bold text-center mb-8 uppercase tracking-widest leading-tight max-w-md px-4">{error}</p>
+            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm px-4">
+              <button
+                onClick={startCamera}
+                className="flex-1 py-4 text-xs font-bold uppercase tracking-widest text-slate-950 bg-cyan-400 hover:bg-cyan-300 rounded-2xl transition-all font-black text-center"
+              >
+                Retry Camera
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all font-bold text-[10px] uppercase tracking-widest text-slate-300 border border-white/10"
+              >
+                <ImageIcon className="w-4 h-4" />
+                Scan Image File
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -424,9 +610,16 @@ export default function QRScanner({ maxHistory = 50 }: QRScannerProps) {
                   className="glass p-4 rounded-2xl border border-white/5 flex flex-col gap-3 group hover:border-cyan-400/30 transition-all"
                 >
                   <div className="flex justify-between items-start">
-                    <span className="text-[9px] font-mono text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded uppercase">
-                      {formatTime(item.timestamp)}
-                    </span>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[9px] font-mono text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded uppercase">
+                        {formatTime(item.timestamp)}
+                      </span>
+                      {item.format && (
+                        <span className="text-[9px] font-mono text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded uppercase">
+                          {item.format}
+                        </span>
+                      )}
+                    </div>
                     <button 
                       onClick={() => removeFromHistory(item.id)}
                       className="p-1 text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
