@@ -133,21 +133,23 @@ export default function QRGenerator() {
         });
         const N = qr.modules.size;
         
+        const margin = 4;
+        const totalCells = N + (2 * margin);
+        // Target high-definition dimensions (e.g. at least 600px width/height)
+        const cellSize = Math.max(6, Math.ceil(600 / totalCells));
+        const canvasSize = totalCells * cellSize;
+
         const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           // Clear background with designated background color
           ctx.fillStyle = bgColor;
-          ctx.fillRect(0, 0, size, size);
+          ctx.fillRect(0, 0, canvasSize, canvasSize);
 
           // Prepare foreground color
           ctx.fillStyle = fgColor;
-
-          const margin = 2;
-          const totalCells = N + (2 * margin);
-          const cellSize = size / totalCells;
 
           const isFinderPattern = (r: number, c: number, size: number) => {
             if (r < 7 && c < 7) return true;
@@ -166,10 +168,10 @@ export default function QRGenerator() {
                   // Standard crisp square grids for corner patterns
                   ctx.fillRect(x, y, cellSize, cellSize);
                 } else {
-                  // Stylized rounded dots with premium 0.82 spacing ratio
+                  // Stylized rounded dots with premium 0.85 spacing ratio
                   const cx = x + (cellSize / 2);
                   const cy = y + (cellSize / 2);
-                  const radius = (cellSize / 2) * 0.82;
+                  const radius = (cellSize / 2) * 0.85;
                   ctx.beginPath();
                   ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
                   ctx.fill();
@@ -181,8 +183,8 @@ export default function QRGenerator() {
         }
       } else {
         const url = await QRCode.toDataURL(finalPayload, {
-          width: size,
-          margin: 2,
+          width: 600,
+          margin: 4,
           color: {
             dark: fgColor,
             light: bgColor,
@@ -201,15 +203,18 @@ export default function QRGenerator() {
   }, [text, wifi, vcard, contentType, fgColor, bgColor, size, media, qrStyle]);
 
   const handleDownload = () => {
+    if (!qrDataUrl) return;
     const link = document.createElement('a');
     link.href = qrDataUrl;
-    link.download = `qr-code-${Date.now()}.png`;
+    const nameSuffix = contentType.toLowerCase();
+    link.download = `qr-code-${nameSuffix}-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   const handleCopy = async () => {
+    if (!qrDataUrl) return;
     try {
       const response = await fetch(qrDataUrl);
       const blob = await response.blob();
